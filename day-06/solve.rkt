@@ -55,10 +55,30 @@
 
 (define lis (sequence-map (lambda (s) (string-split s ")")) (in-lines in)))
 
+( define (ancestors h name l) 
+	 (let [[par (planet-parent (hash-ref h name))]]
+	   (begin
+	     (println (cons name par) )
+	 (cond 
+	   [(eq? par #f) l]
+	   [else (ancestors h par (cons par l))]
+	   ))))
+
+( define (len-diff l1 l2)
+	 (begin (println l1) (println l2)
+	 (cond
+	   [(string=? (car l1) (car l2)) (len-diff (cdr l1) (cdr l2))]
+	   [else (+ (length l1) (length l2))]
+	   )))
+
 (begin
   (stream->list (sequence->stream (sequence-map (lambda (x) (apply insert-rel! x)) lis)))
-  (print ht)
+  (println ht)
+  (hash-map ht (lambda (k v) (cons k (planet-parent v))  )) 
+#|
   (set-lvl! ht "COM" 0)
   (println levels)
   (print (foldl + 0 (hash-map levels * ))  )
+|#
+  (len-diff (ancestors ht "YOU" '() ) (ancestors ht "SAN" '()))
   )
