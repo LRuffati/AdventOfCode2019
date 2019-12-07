@@ -1,19 +1,21 @@
 #lang racket
 
-(define inp-v '())
-(define (inp-instr) (let ([i (car inp-v)]) (set! inp-v (cdr inp-v)) i))
 
-( define outs '() )
+(define (inp-instr) (thread-receive))
 
-(define ( out-instr val)  (set! outs (cons val outs)))
+(define (out-instr o m)  (thread-send o m))
 
-(define ( lt val1 val2  )  (cond [(< val1 val2) 1] [else 0] ) )
-(define ( eq val1 val2) (cond [(eqv? val1 val2) 1] [else 0] ) )
-(define (jit p t j) (cond [(eq? 0 t) (+ p 3)]
-			  [else j]) )
-(define (jif p t j) (cond [(eq? 0 t) j]
-			  [else (+ p 3)]) )
-(define vec (vector 4 3 -1 4 0))
+(define (lt val1 val2) (cond [(< val1 val2) 1] 
+			     [else 0] ) )
+
+(define (eq val1 val2) (cond [(eqv? val1 val2) 1] 
+			     [else 0] ) )
+
+(define (jit p t j)    (cond [(eq? 0 t) (+ p 3)]
+			     [else      j]))
+
+(define (jif p t j)    (cond [(eq? 0 t) j]
+			     [else      (+ p 3)]))
 
 (define instructions #hash(
 			    (1 . (+         . (2 . 1)))
@@ -51,16 +53,18 @@
 				) 
 			(cond 
 			   [(and (< 4 op-num) (> 7 op-num)) 
-				(lambda (v p) (apply fun (cons p (eval-instr v 'p (+ 1 p) args))))
-			    ]
-			   [(eq? (cddr op) 0)
-			    (lambda (v p) ; pass the vector and the position to the result
-			          	(apply fun (eval-instr v 'p (+ 1 p) args))
+				(lambda (o v p) 
+				        (apply fun 
+					       (cons p (eval-instr v 'p (+ 1 p) args))
+					       ))]
+			   [(eq? 4 op-num)
+			    (lambda (o v p) ; pass the vector and the position to the result
+			          	(apply fun (cons o (eval-instr v 'p (+ 1 p) args)))
 					(+ n-tot 1 p)
 					)]
 
 			   [else
-			    (lambda (v p)
+			    (lambda (o v p)
 				(vector-set! v (vector-ref v (+ p n-tot)) 
 					       (apply fun (eval-instr v 'p (+ 1 p) args)))
 				(+ n-tot 1 p)
@@ -82,27 +86,57 @@
 			      [else (next-perm (+ i 1))])
 		) )
 
-(define (run-machine)
+(define (run-machine o) ; o is the thread to which I should direct the output
 	(let loop ([pos 0] [v (apply vector lis)])
 		(cond 
-			[(eq? ( vector-ref v pos) 99) (let ([o (car outs)]) (set! outs '()) o)] 
+			[(eq? (vector-ref v pos) 99) (thread-send o 'end)
+						     ] 
 
-			[else (loop ((interpr (vector-ref v pos)) v pos) v)])
+			[else (loop ((interpr (vector-ref v pos)) o v pos) v)])
 	      ))
 
-(define max-o 0)
+(define (start-thread o conf)
+  	(let ([t 
+		(thread 
+		  (lambda ()
+		          (run-machine o)
+			  (thread-receive)
+			  ))])
+	     (thread-send t conf)
+	     t
+	     ))
 
-(let box-loop ([box 0] [it (next-perm 0)] [last-out 0])
-  	(let ([cmd (remainder (quotient it (expt 5 box)) 5)])
-		(set! inp-v (list cmd last-out)))
-	(cond 
-	   [(eq? box 5) (set! max-o (max max-o last-out))
-			(print max-o) (print " -- ") (print it) (print " --- ")
-			(cond 
-			  [(> it (- (expt 5 5) 1)) max-o]
-			  [ else (println last-out) (box-loop 0 (next-perm (+ 1 it)) 0)]
-			  )]
-	   [else (box-loop (+ 1 box) it (run-machine))]
-	  )
+(define (thread-out call-thread) (thread (lambda () 
+			             (let ([t (thread-receive)])
+				          (let loop ([m (thread-receive)]
+						     [l '()])
+					            (cond
+						      [(eq? m 'end) 
+						       (thread-send call-thread (car l))]
+						      [else (thread-send t m)
+							    (loop (thread-receive) (cons m l))]
+						      )
+				     )))))
 
-)
+(define (start-experiment codes input) (let* ([ot (thread-out (current-thread))]
+					      [ts (foldr 
+						    (lambda 
+						      (e prev) 
+						      (cons (start-thread (car prev) (+ 5 e)) prev))
+						    (list ot)
+						    codes)]
+					      )
+					      (thread-send ot (car ts))
+					      (thread-send (car ts) input)
+					      (thread-receive)
+					 ))
+
+(let loop ([it (next-perm 0)] [max-o 0])
+  	(let* ([l (range 4 -1 -1)]
+	       [v (map (lambda (x) (remainder (quotient it (expt 5 x)) 5)) l)])
+	      (println max-o)
+	      (cond 
+		[(> it (expt 5 5)) max-o]
+		[else (loop (next-perm (+ 1 it)) (max max-o (start-experiment v 0)) )]
+		)))
+
