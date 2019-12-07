@@ -122,7 +122,9 @@
 					      [ts (foldr 
 						    (lambda 
 						      (e prev) 
-						      (cons (start-thread (car prev) (+ 5 e)) prev))
+						      (sleep 0.04)
+						      (cons (start-thread (car prev) (+ 5 e)) prev)
+						      )
 						    (list ot)
 						    codes)]
 					      )
