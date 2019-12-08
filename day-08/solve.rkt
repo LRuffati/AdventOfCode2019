@@ -30,4 +30,20 @@
 	))
 )
 
-(print (fun '(1000 . (0 . 0)) '(0 . (0 . 0)) 0 lis))
+; fun2 vector pos lis
+(define (fun2 vec p lis) 
+        (cond
+	  [(empty? lis) vec]
+	  [(eq? p 150) (fun2 vec 0 lis)]
+	  [(not (eq? (vector-ref vec p) 2)) (fun2 vec (+ 1 p) (cdr lis))]
+	  [else (vector-set! vec p (car lis)) (fun2 vec (+ 1 p) (cdr lis))]
+	  ))
+
+(define (pp lis col)(cond 
+		      [(empty? lis) (display "\n")]
+		      [(eq? col 25) (display "\n") (pp lis 0)]
+		      [(eq? 1 (car lis)) (display "█") (pp (cdr lis) (+ 1 col))]
+		      [else (display " ") (pp (cdr lis) (+ 1 col))]
+		      ))
+
+(pp (vector->list (fun2 (apply vector (take lis 150)) 0 (drop lis 150))) 0)
